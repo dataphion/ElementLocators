@@ -1,0 +1,15 @@
+pika==1.1.0
+requests==2.22.0
+Pillow==6.1.0
+cx_Oracle==7.2.2
+Flask==1.1.1
+flask_cors==3.0.8
+flask_restful==0.3.7
+protobuf==3.9.1
+imutils==0.5.3
+jsonschema==3.0.2
+mysql_connector_repackaged==0.3.1
+gevent_socketio==0.3.6
+python-socketio==4.3.1
+mysql-connector-python==8.0.17
+pymongo==3.9.0
