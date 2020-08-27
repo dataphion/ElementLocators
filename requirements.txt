@@ -15,3 +15,6 @@ pytesseract==0.3.0
 scipy==1.3.1
 gevent_socketio==0.3.6
 google-cloud-vision==1.0.0
+confluent_kafka
+confluent-kafka==1.5.0
+
