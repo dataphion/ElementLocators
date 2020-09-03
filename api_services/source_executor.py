@@ -426,35 +426,19 @@ class Source_Executor:
     def kafkaconsumer(self, data, properties):
 
         try:
-            from kafka.consumer import KafkaConsumer
-            from kafka import TopicPartition
-            from time import sleep
-            # print(properties)
-            host = data['ip']+":"+data['port']
+            print("propertirs ---->", properties)
+            max_timeout = properties['KafkaWaitingTime']
             topic_name = properties['KafkaTopicName']
-            
-            # GET LAST OFFSET
-            consumer = KafkaConsumer(topic_name, bootstrap_servers=host)
-            partitions=  [TopicPartition(topic_name, p) for p in consumer.partitions_for_topic(topic_name)]
-            last_offset_per_partition = consumer.end_offsets(partitions)
-            str_partition = str(last_offset_per_partition)
-            offset_value = int(str_partition.split(":")[1].split("}")[0])
+            host = data['ip']+":"+data['port']
 
-            last_offset_value = offset_value
-            latest_offset_value = 0
+            poll_intervel = properties['PollingInterval']
+            counter = max_timeout*60/poll_intervel
+            found = False
+            previous_offset = properties['offsetValue']
+            expected_incr = properties['ExpectedIncrement']
+            cond = "GE"
 
-            # POLLING & WAITING TIME TO CONSUME MESSAGE
-            max_time = properties['KafkaWaitingTime'] * 60
-            t = datetime.datetime.now()
-            split_time= str(t).split(" ")
-            date_split = split_time[0].split("-")
-            time_split = split_time[1].split(":")
-            a = datetime.datetime(int(date_split[0]),int(date_split[1]),int(date_split[2]),int(time_split[0]),int(time_split[1]),int(float(time_split[2])))
-            waiting_time = a + datetime.timedelta(0,max_time) # days, seconds, then other fields.
-
-            received_msg = ""
-            maxi_time = a.time()
-
+            # --connect to kafka
             print("get new msg for consumer -------->")
             from confluent_kafka import Consumer, KafkaError
             settings = {
@@ -465,61 +449,132 @@ class Source_Executor:
                 'session.timeout.ms': 6000,
                 'default.topic.config': {'auto.offset.reset': 'smallest'}
             }
-
             c = Consumer(settings)
             c.subscribe([topic_name])
-            message_received = False
-            while maxi_time < waiting_time.time():
-                sleep(properties['PollingInterval'])
-                tm = datetime.datetime.now()
-                split_time1= str(tm).split(" ")
-                date_split1 = split_time1[0].split("-")
-                time_split1 = split_time1[1].split(":")
-                a1 = datetime.datetime(int(date_split1[0]),int(date_split1[1]),int(date_split1[2]),int(time_split1[0]),int(time_split1[1]),int(float(time_split1[2])))
-                maxi_time = a1.time()
-                # print("maxi_time updated", maxi_time)
+            print("counter --value", counter)
+            cur_offset = 0
+
+            while(counter > 0 and found == False ):
                 msg = c.poll(properties['PollingInterval'])
                 if msg is None:
-                    continue
+                    print("--- no msg ----")
                 elif not msg.error():
-                    if msg.offset() == last_offset_value:
-                        latest_offset_value = msg.offset()
-                        print('Received message: {0}'.format(msg.value()))
-                        received_msg = msg.value().decode("utf-8")
-                        message_received = True
-                        # VALIDATE RESPONSE
-                        if properties['kafkaValidation'] == "response":
-                            print("validate response", type(properties['ExpectedKafkaReponse']))
-                            if received_msg.startswith("{"):
-                                received_msg = json.loads(received_msg)
-                            if type(received_msg) == type(properties['ExpectedKafkaReponse']):
-                                for key in properties['ExpectedKafkaReponse'].keys(): 
-                                    if not key in received_msg:
-                                        print("validation failed")
-                                        message_received = False
-                            else:
-                                message_received = False
-                        else:
-                            print("index validation")
-                            if latest_offset_value == last_offset_value:
-                                message_received = True
-                            else:
-                                message_received = False
-                        break
-                elif msg.error().code() == KafkaError._PARTITION_EOF:
-                    if msg.offset() == last_offset_value:
-                        print('End of partition reached {0}/{1}'
-                            .format(msg.topic(), msg.partition()))
-                        break
+                    print("message from kafka --->", msg.value().decode("utf-8"))
+                    cur_offset = msg.offset()+1
+                
+                print("current offset", cur_offset)
+
+                if cond == "GE":
+                    if cur_offset >= previous_offset + expected_incr : 
+                        found = True
                 else:
-                    if msg.offset() == last_offset_value:
-                        print('Error occured: {0}'.format(msg.error().str()))
-                        break
-            
-            if message_received:
-                return {'status':True,'response':{"status":f"Consume from {topic_name}", "message": received_msg }}
-            else:
+                    if cur_offset == previous_offset :
+                        found = True
+                counter = counter - 1
+
+            if found == False:
                 return {'status':False,'response':{"status":f"Consume from {topic_name}", "message": "" }}
+            else:    
+                return {'status':True,'response':{"status":f"Consume from {topic_name}", "message": f"found {expected_incr} new messages" }}
+            
+
+
+            # ----------- Previous working code ------------
+
+            # from kafka.consumer import KafkaConsumer
+            # from kafka import TopicPartition
+            # from time import sleep
+            # # print(properties)
+            # host = data['ip']+":"+data['port']
+            # topic_name = properties['KafkaTopicName']
+            
+            # # GET LAST OFFSET
+            # consumer = KafkaConsumer(topic_name, bootstrap_servers=host)
+            # partitions=  [TopicPartition(topic_name, p) for p in consumer.partitions_for_topic(topic_name)]
+            # last_offset_per_partition = consumer.end_offsets(partitions)
+            # str_partition = str(last_offset_per_partition)
+            # offset_value = int(str_partition.split(":")[1].split("}")[0])
+
+            # last_offset_value = offset_value
+            # latest_offset_value = 0
+
+            # # POLLING & WAITING TIME TO CONSUME MESSAGE
+            # max_time = properties['KafkaWaitingTime'] * 60
+            # t = datetime.datetime.now()
+            # split_time= str(t).split(" ")
+            # date_split = split_time[0].split("-")
+            # time_split = split_time[1].split(":")
+            # a = datetime.datetime(int(date_split[0]),int(date_split[1]),int(date_split[2]),int(time_split[0]),int(time_split[1]),int(float(time_split[2])))
+            # waiting_time = a + datetime.timedelta(0,max_time) # days, seconds, then other fields.
+
+            # received_msg = ""
+            # maxi_time = a.time()
+
+            # print("get new msg for consumer -------->")
+            # from confluent_kafka import Consumer, KafkaError
+            # settings = {
+            #     'bootstrap.servers': host,
+            #     'group.id': 'mygroup',
+            #     'client.id': 'client-1',
+            #     'enable.auto.commit': True,
+            #     'session.timeout.ms': 6000,
+            #     'default.topic.config': {'auto.offset.reset': 'smallest'}
+            # }
+
+            # c = Consumer(settings)
+            # c.subscribe([topic_name])
+            # message_received = False
+            # while maxi_time < waiting_time.time():
+            #     sleep(properties['PollingInterval'])
+            #     tm = datetime.datetime.now()
+            #     split_time1= str(tm).split(" ")
+            #     date_split1 = split_time1[0].split("-")
+            #     time_split1 = split_time1[1].split(":")
+            #     a1 = datetime.datetime(int(date_split1[0]),int(date_split1[1]),int(date_split1[2]),int(time_split1[0]),int(time_split1[1]),int(float(time_split1[2])))
+            #     maxi_time = a1.time()
+            #     # print("maxi_time updated", maxi_time)
+            #     msg = c.poll(properties['PollingInterval'])
+            #     if msg is None:
+            #         continue
+            #     elif not msg.error():
+            #         if msg.offset() == last_offset_value:
+            #             latest_offset_value = msg.offset()
+            #             print('Received message: {0}'.format(msg.value()))
+            #             received_msg = msg.value().decode("utf-8")
+            #             message_received = True
+            #             # VALIDATE RESPONSE
+            #             if properties['kafkaValidation'] == "response":
+            #                 print("validate response", type(properties['ExpectedKafkaReponse']))
+            #                 if received_msg.startswith("{"):
+            #                     received_msg = json.loads(received_msg)
+            #                 if type(received_msg) == type(properties['ExpectedKafkaReponse']):
+            #                     for key in properties['ExpectedKafkaReponse'].keys(): 
+            #                         if not key in received_msg:
+            #                             print("validation failed")
+            #                             message_received = False
+            #                 else:
+            #                     message_received = False
+            #             else:
+            #                 print("index validation")
+            #                 if latest_offset_value == last_offset_value:
+            #                     message_received = True
+            #                 else:
+            #                     message_received = False
+            #             break
+            #     elif msg.error().code() == KafkaError._PARTITION_EOF:
+            #         if msg.offset() == last_offset_value:
+            #             print('End of partition reached {0}/{1}'
+            #                 .format(msg.topic(), msg.partition()))
+            #             break
+            #     else:
+            #         if msg.offset() == last_offset_value:
+            #             print('Error occured: {0}'.format(msg.error().str()))
+            #             break
+            
+            # if message_received:
+            #     return {'status':True,'response':{"status":f"Consume from {topic_name}", "message": received_msg }}
+            # else:
+            #     return {'status':False,'response':{"status":f"Consume from {topic_name}", "message": "" }}
                 
         except Exception as identifier:
             print("--------error>", identifier)
