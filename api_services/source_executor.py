@@ -12,6 +12,9 @@ import cx_Oracle
 from mysql.connector import Error
 from pymongo import MongoClient
 import datetime
+from cassandra.cluster import Cluster
+from cassandra.auth import PlainTextAuthProvider
+from cassandra.query import ordered_dict_factory
 
 host = "http://localhost:1337"
 flow = host+"/flows/"
@@ -88,7 +91,8 @@ class Source_Executor:
     def testsource(self,mqdata):
         
         try:
-            print("mqdata----->", mqdata)
+            print("mqdata   ----->", mqdata)
+            print("flow url ---->", flow+str(mqdata["testcaseid"]))
             response = requests.get(flow+str(mqdata["testcaseid"]))
             response = json.loads(response.content)
             graph_json=response["graph_json"]
@@ -305,6 +309,109 @@ class Source_Executor:
                             'testsessionexecutionid': mqdata["testsessionexecutionid"], 'index': mqdata["index"]}
                 else:
                     raise Exception("error")
+            
+            
+            def cassandraquery(data,Query):
+                
+                try:
+                    print("data -------------->",data)
+                    print("keyspace", data["database"])
+                    output = []
+                    json_response = []
+                    host = data["ip"]
+                    if isinstance(host, str):
+                        host = host.split(",")
+                        print("After parse")
+                    
+                    clstr = None
+                    auth_provider = PlainTextAuthProvider(username=data["username"], password=data["password"])
+                    clstr = Cluster(contact_points=host, port=data["port"], auth_provider=auth_provider)
+                    session = clstr.connect(data["database"])
+                    #session.row_factory = ordered_dict_factory
+
+                    print('Connected to Cassandra database')
+
+                    print("Query==>", Query)
+
+                    if "select" in Query.lower():
+                        rows = session.execute(Query)
+
+                        if rows:
+                            for row in rows:
+                                output.append(row)
+                                print("Row=", row)   
+                                                    
+                            json_response = [dict((i, str(value).lower()) \
+                                for i, value in enumerate(row)) for row in output]
+
+                        else:   
+                            raise Exception("There are no records")
+                        
+                        print("JSON===>", json_response)
+                    elif "insert" in Query.lower():
+                        session.execute(Query)
+                        print("Inserted data")
+                    else:
+                        session.commit()
+
+                    return {'status':True,'output':output,'response':json_response}
+
+                except Exception as e:
+                    print(e)
+                    return {'status':False}
+            
+            if DatabaseType == "cassandra":
+                print("database type --->", DatabaseType)
+                print("data ---->", mqdata)
+                ##get db data
+                data = {'environment_id':mqdata['environment_id'],'source_id':properties["CassandraSourceId"]}
+                data = self.get_db_data(data)
+                print("get db data ---->", data)
+
+                if QueryType == "QueryTemplate":
+                    Query = properties["CassandraQueryTemplate"]
+                    print("if Query", Query)
+                elif QueryType == "WriteQuery":
+                    Query = properties["WrittenQuery"]
+                    print("else Query", Query)
+
+                # Query = Query.lower()
+                query_response = cassandraquery(data,Query)
+                print("Query_response", data)
+                print("After query_response", query_response)
+                if query_response["status"]:
+                    json_response={
+                        'name':title,
+                        'status':'pass',
+                        'node_id':mqdata["id"],
+                        'type':DatabaseType,
+                        'response': query_response["response"],
+                        'source_result':str(query_response["output"]),      
+                        'index':mqdata["index"],             
+                        'testcaseexecution':{
+                            'id':mqdata["testcaseexecutionid"]
+                        }
+                    }
+                    dbresponse = requests.post(url=flowsteps,json=json_response)
+                    return {'status':True,'id':mqdata["id"],'testcaseid':mqdata["testcaseid"],
+                        'type':DatabaseType,'testcaseexecutionid':mqdata["testcaseexecutionid"],'environment_id':mqdata['environment_id'],'browser':mqdata['browser'],
+                        'testsessionexecutionid':mqdata["testsessionexecutionid"],'index':mqdata["index"] }
+                else:
+                    json_response={
+                        'name':title,
+                        'status':'fail',
+                        'node_id':mqdata["id"],
+                        'type':DatabaseType,
+                        'source_result':"Error",
+                        'index':mqdata["index"],              
+                        'testcaseexecution':{
+                            'id':mqdata["testcaseexecutionid"]
+                        }
+                    }
+                    dbresponse = requests.post(url=flowsteps,json=json_response).json()
+                    return {'status':False,'id':mqdata["id"],'testcaseid':mqdata["testcaseid"],
+                        'type':DatabaseType,'testcaseexecutionid':mqdata["testcaseexecutionid"],'environment_id':mqdata['environment_id'],'browser':mqdata['browser'],
+                        'testsessionexecutionid':mqdata["testsessionexecutionid"],'index':mqdata["index"] }
             
 
             if DatabaseType == "kafka":
