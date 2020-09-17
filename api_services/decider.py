@@ -306,8 +306,9 @@ class Decider:
                 
                 data = {"id":node_id,"testcaseid":id,"testcaseexecutionid":testcaseexecution,
                             'testsessionexecutionid':testsessionexecution,"index":index,
-                            'environment_id':environment_id,"browser":browser}       
-                self.pushtoqueue('condition_executor',data)
+                            'environment_id':environment_id,"browser":browser,"node_id":node_id}   
+                     
+                requests.post(url=testcase+"run",json=data)
                 socketdata = {'id':node_id,'testcaseexecutionid':testcaseexecution,
                             'testsessionexecutionid':testsessionexecution,
                             'type':graph_json[node_id]["properties"]["Method"],
