@@ -204,6 +204,10 @@ class Api_Executor:
 
             method = properties["Method"]
             Uri = host_url+properties["Uri"]
+
+            if "custom_api" in properties:
+                Uri = properties["Uri"]
+
             BodyType = properties["BodySelectedMenu"]
             pathparams = properties["PathParametersAdd"] if properties["PathParametersAdd"] else ""
             params = properties["QueryParametersAdd"] if properties["QueryParametersAdd"] else []
@@ -313,7 +317,9 @@ class Api_Executor:
                 resp_data = response.text
 
             ### validate api response
-            validation = self.validateresponse(properties, resp_data,response.status_code)
+            validation = True
+            if "custom_api" not in properties:
+                validation = self.validateresponse(properties, resp_data,response.status_code)
 
             json_response={
                 'name': title,
