@@ -304,7 +304,7 @@ class Decider:
                 self.pushtosocketio(socketdata)
             elif Type == "testcase":
                 data = {"id": node_id, "testcaseid": graph_json[node_id]["properties"]["UiTestcase"], "testcaseexecutionid": testcaseexecution,
-                            'testsessionid':testsessionexecution,"index":index,
+                        'testsessionid': testsessionexecution, "index": index, "title": graph_json[node_id]["properties"]["Title"],
                             'environment_id':environment_id,"browser":browser,"node_id":node_id,"api_testcase_id":id}   
                      
                 requests.post(url=testcase+"run",json=data)
