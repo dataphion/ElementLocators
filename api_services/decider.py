@@ -303,10 +303,9 @@ class Decider:
                             'status':"started","index":index}
                 self.pushtosocketio(socketdata)
             elif Type == "testcase":
-                
-                data = {"id":node_id,"testcaseid":id,"testcaseexecutionid":testcaseexecution,
-                            'testsessionexecutionid':testsessionexecution,"index":index,
-                            'environment_id':environment_id,"browser":browser,"node_id":node_id}   
+                data = {"id": node_id, "testcaseid": graph_json[node_id]["properties"]["UiTestcase"], "testcaseexecutionid": testcaseexecution,
+                            'testsessionid':testsessionexecution,"index":index,
+                            'environment_id':environment_id,"browser":browser,"node_id":node_id,"api_testcase_id":id}   
                      
                 requests.post(url=testcase+"run",json=data)
                 socketdata = {'id':node_id,'testcaseexecutionid':testcaseexecution,
