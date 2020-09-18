@@ -205,8 +205,9 @@ class Api_Executor:
             method = properties["Method"]
             Uri = host_url+properties["Uri"]
 
-            if "custom_api" in properties:
-                Uri = properties["Uri"]
+            # if "custom_api" in properties:
+            #     Uri = properties["Uri"]
+
 
             BodyType = properties["BodySelectedMenu"]
             pathparams = properties["PathParametersAdd"] if properties["PathParametersAdd"] else ""
@@ -236,6 +237,8 @@ class Api_Executor:
                 'params': params,
                 'headers': headers
             }
+
+            print("request payloads api ------------------>", request_dict)
 
             data = properties["AceEditorValue"] if properties["AceEditorValue"] else []
             jsondata = {}
@@ -342,8 +345,9 @@ class Api_Executor:
             if not validation:
                 json_response['status'] = "fail"
                 dec_response['status'] = False
-
+            print("flowsteps data ---------->", json_response)
             dbresponse = requests.post(url=flowsteps,json=json_response)
+            # print(dbresponse['data'])
             print("cms response")
             # print(dbresponse.text)
             print("------------")
