@@ -15,6 +15,8 @@ import datetime
 from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.query import ordered_dict_factory
+import psycopg2
+import paramiko
 
 host = "http://localhost:1337"
 flow = host+"/flows/"
@@ -22,6 +24,7 @@ flowsteps = host+"/flowsteps/"
 graphql = host+"/graphql"
 Dbregistration = host+"/Dbregistrations/"
 environment = host+"/environments/"
+# getkeyfile = host
 
 class Source_Executor:
     def __init__(self):
@@ -98,6 +101,7 @@ class Source_Executor:
             graph_json=response["graph_json"]
             node_json = graph_json[mqdata["id"]]
             properties = node_json["properties"]
+            print("properties ---->", properties)
             title = properties["Title"]
             Method = properties["Method"]
             QueryType = properties["QueryType"]
@@ -234,6 +238,98 @@ class Source_Executor:
                     return {'status':False,'id':mqdata["id"],'testcaseid':mqdata["testcaseid"],
                         'type':DatabaseType,'testcaseexecutionid':mqdata["testcaseexecutionid"],'environment_id':mqdata['environment_id'],'browser':mqdata['browser'],
                         'testsessionexecutionid':mqdata["testsessionexecutionid"],'index':mqdata["index"] }
+
+            def mypostgresquery(self, data,Query):
+                try:
+                    print("test postgres query", data)
+                    output = []
+                    json_response = []
+                    connection = psycopg2.connect(user=data["username"],
+                                password=data["password"],
+                                host=data["ip"],
+                                port=data["port"],
+                                database=data["database"])
+                    if connection :
+                        cursor = connection.cursor()
+                        cursor.execute(Query)
+                        if "select" in Query.lower():
+                            rows = cursor.fetchall()
+                            if rows:
+                                for row in rows:
+                                    output.append(row)
+                                json_response = [dict((str(cursor.description[i][0]).lower(), str(value).lower()) \
+                                    for i, value in enumerate(row)) for row in output]
+                            else:
+                                raise Exception("There are no records")
+                        
+                        elif "insert" in Query.lower():
+                            connection.commit()
+                        else:
+                            connection.commit()
+
+                        cursor.close()
+                        connection.close()
+                        return {'status':True,'output':output,'response':json_response}
+
+                    else:
+                        return {'status': False}
+                except Exception as e:
+                    print(e)
+                    return {'status': False}
+
+
+            if DatabaseType == "postgres":
+                print("----- execute postgres queries -----")
+                print(properties)
+                
+                data = {'environment_id':mqdata['environment_id'],'source_id':properties["CassandraSourceId"]}
+                data = self.get_db_data(data)
+                print("get db data ---->", data)
+
+                if QueryType == "QueryTemplate":
+                    Query = properties["CassandraQueryTemplate"]
+                    print("if Query", Query)
+                elif QueryType == "WriteQuery":
+                    Query = properties["WrittenQuery"]
+                    print("else Query", Query)
+
+                query_response = self.mypostgresquery(data, query)
+                print("---postgres query response---", query_response)
+                if query_response["status"]:
+                    json_response={
+                        'name':title,
+                        'status':'pass',
+                        'node_id':mqdata["id"],
+                        'type':DatabaseType,
+                        'response': query_response["response"],
+                        'source_result':str(query_response["output"]),      
+                        'index':mqdata["index"],             
+                        'testcaseexecution':{
+                            'id':mqdata["testcaseexecutionid"]
+                        }
+                    }
+                    dbresponse = requests.post(url=flowsteps,json=json_response)
+                    return {'status':True,'id':mqdata["id"],'testcaseid':mqdata["testcaseid"],
+                        'type':DatabaseType,'testcaseexecutionid':mqdata["testcaseexecutionid"],'environment_id':mqdata['environment_id'],'browser':mqdata['browser'],
+                        'testsessionexecutionid':mqdata["testsessionexecutionid"],'index':mqdata["index"] }
+                else:
+                    json_response={
+                        'name':title,
+                        'status':'fail',
+                        'node_id':mqdata["id"],
+                        'type':DatabaseType,
+                        'source_result':"Error",
+                        'index':mqdata["index"],              
+                        'testcaseexecution':{
+                            'id':mqdata["testcaseexecutionid"]
+                        }
+                    }
+                    dbresponse = requests.post(url=flowsteps,json=json_response).json()
+                    return {'status':False,'id':mqdata["id"],'testcaseid':mqdata["testcaseid"],
+                        'type':DatabaseType,'testcaseexecutionid':mqdata["testcaseexecutionid"],'environment_id':mqdata['environment_id'],'browser':mqdata['browser'],
+                        'testsessionexecutionid':mqdata["testsessionexecutionid"],'index':mqdata["index"] }
+
+
             
             if DatabaseType == "oracle":
                 
@@ -412,7 +508,99 @@ class Source_Executor:
                     return {'status':False,'id':mqdata["id"],'testcaseid':mqdata["testcaseid"],
                         'type':DatabaseType,'testcaseexecutionid':mqdata["testcaseexecutionid"],'environment_id':mqdata['environment_id'],'browser':mqdata['browser'],
                         'testsessionexecutionid':mqdata["testsessionexecutionid"],'index':mqdata["index"] }
+
+            def executeShellCommand(data, properties):
+                try:
+                    print("shell properties ---", properties)
+                    print("shell data ---", data)
+
+                    # getkeyfile_host = "http://localhost:1337"
+                    PEMFILEEXIST = False
+                    print("pem file url", host)
+                    # print("access url", graphql)
+                    if 'pem_file_url' in properties:
+                        if properties['pem_file_url']:
+                            r = requests.get(host+properties['pem_file_url'], allow_redirects=True)
+                            open('MY_AIT_KEY.pem', 'wb').write(r.content)
+                            PEMFILEEXIST= True
+
+                    k = None
+                    port = 22
+                    password = None
+                    if PEMFILEEXIST:
+                        k = paramiko.RSAKey.from_private_key_file("MY_AIT_KEY.pem")
+                    if properties['SshPort']:
+                        port = int(properties['SshPort'])
+                    if properties['ServerPassword']:
+                        password = properties['ServerPassword']
+                    
+                    c = paramiko.SSHClient()
+                    c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                    # print()
+                    
+                    c.connect( hostname = properties['ServerIp'], port=port, username = properties['ServerUsername'], password=password, pkey = k )
+                    print("connected")
+                    output = {}
+                    cmd = []
+                    if properties['ShellCommand']:
+                        cmd = properties['ShellCommand'].split(",")
+                    commands = cmd
+                    print("cmd---------->", cmd)
+                    for command in commands:
+                        print("Executing {}".format( command ))
+                        stdin , stdout, stderr = c.exec_command(command)
+                        # output
+                        result = stdout.read()
+                        result = str(result, 'utf-8')
+                        print("results---->", result)
+                        # error
+                        error = stderr.read()
+                        error = str(error, 'utf-8')
+                        if result:
+                            output[command] = {"result": result, "command": command}
+                        else:
+                            output[command] = {"error": error, "command": command}
+                    c.close()
+
+                    return{'status': True, 'response': output}
+
+                except Exception as e:
+                    print(e)
+                    return{'status': False}
             
+            if DatabaseType == "shell":
+                print("------inside shell executionnnnnn-----------")
+                data = {'environment_id':mqdata['environment_id']}
+                # data = self.get_db_data(data)
+                # print("get db data ---->", data)
+
+                shellResponse = executeShellCommand(data, properties)
+
+                if shellResponse["status"]:
+                    json_response = {
+                        'name': title,
+                        'status':'pass',
+                        'node_id': mqdata["id"],
+                        'type': "Shell Command",
+                        'response': shellResponse["response"],
+                        'index': mqdata["index"],
+                        'testcaseexecution': {
+                            'id': mqdata["testcaseexecutionid"]
+                        }
+                    }
+                    print("json_response ------->", json_response)
+                    print("--------url------", flowsteps)
+                    dbresponse = requests.post(
+                        url=flowsteps, json=json_response)
+                    print("dbresponse ------>", dbresponse)   
+                    return {'status': True, 'id': mqdata["id"], 'testcaseid': mqdata["testcaseid"],
+                            'type': DatabaseType, 'testcaseexecutionid': mqdata["testcaseexecutionid"],'environment_id':mqdata['environment_id'],'browser':mqdata['browser'],
+                            'testsessionexecutionid': mqdata["testsessionexecutionid"], 'index': mqdata["index"]}
+                else:
+                    raise Exception("error")
+
+
+
 
             if DatabaseType == "kafka":
                 print("came in kafka")
