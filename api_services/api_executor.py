@@ -259,8 +259,13 @@ class Api_Executor:
                 request_dict['authorizationuser']=AuthorizationUser
                 request_dict['authorizationpass']=AuthorizationPass
 
-            response = requests.request(method=method,url=Uri,headers=headers,params=params,
-                        data=data,json=jsondata,auth=auth)
+            response
+            if jsondata:
+                response = requests.request(method=method,url=Uri,headers=headers,params=params,
+                            data=data,json=jsondata,auth=auth)
+            else:
+                response = requests.request(method=method,url=Uri,headers=headers,params=params,
+                            data=data,auth=auth)
 
             # print(request_dict)
             response.raise_for_status()
