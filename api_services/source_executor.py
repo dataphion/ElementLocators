@@ -1118,7 +1118,7 @@ class Consumer():
         
         # print("{} received '{}'".format(self.name, body))
         data = json.loads(body)
-        print("Data --> ")
+        print("source Data --> ")
         print(data)
 
         node_response = self._source_executor.testsource(data)

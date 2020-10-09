@@ -60,7 +60,8 @@ class Api_Executor:
                 children_node = graph_json[children]
             Iterator = True if 'parent_data' in mqdata else False
             title = properties["Title"]
-            print(title)
+            print("api titles ---->", title)
+            print("api properties --->", properties)
             
             ### search for {{parent.}}            
             if re.search("\{\{parent\.(.*?)\}\}",json.dumps(properties)) :
@@ -190,85 +191,95 @@ class Api_Executor:
                 isString = False
             
             ### get host
-            print(type(properties))
+            print("properties ------------>", properties)
             print(properties["EndpointPackId"])
-            responsepayload = {'query':"query {  endpointpacks(where: { id: \"ENDPACKID\"}) { host_url }}"}
-            responsepayload['query'] = responsepayload['query'].replace("ENDPACKID",str(properties["EndpointPackId"]).strip())
-            # print(responsepayload)
-            response_json = requests.post(url=graphql,data=responsepayload).json()
-            host_url = response_json["data"]["endpointpacks"][0]["host_url"]
-
-            # testcase = requests.get(url=tcases+response["testcase"]["id"]).json()
-            # print(testcase["application"]["name"])
-            # host1 = testcase["application"]["url"]
-
-            method = properties["Method"]
-            Uri = host_url+properties["Uri"]
-
-            # if "custom_api" in properties:
-            #     Uri = properties["Uri"]
-
-
-            BodyType = properties["BodySelectedMenu"]
-            pathparams = properties["PathParametersAdd"] if properties["PathParametersAdd"] else ""
-            params = properties["QueryParametersAdd"] if properties["QueryParametersAdd"] else []
-            headers = properties["HeadersAdd"] if properties["HeadersAdd"] else []
-
-            if headers:
-                for key,value in headers.items():
-                    if isinstance(value,dict):
-                        headers[key] = json.dumps(value)
-                    elif not isinstance(value,str):
-                        headers[key] = json.dumps(value)
-            AuthorizationUser = properties["AuthorizationUsername"] if properties["AuthorizationUsername"] else None          
-            AuthorizationPass = properties["AuthorizationPassword"] if properties["AuthorizationPassword"] else None           
-            
-            ### replace parthparam
-            if pathparams:
-                for key,value in pathparams.items():
-                    replstr = "{"+str(key)+"}"
-                    print(replstr)
-                    Uri = Uri.replace(replstr,str(value))
-                    print(Uri)
-
-            request_dict = {
-                'method': method,
-                'url':Uri,
-                'params': params,
-                'headers': headers
-            }
-
-            print("request payloads api ------------------>", request_dict)
-
-            data = properties["AceEditorValue"] if properties["AceEditorValue"] else []
-            jsondata = {}
-            if BodyType == "FormData":
-                data = properties["BodyFormDataAdd"]
-                request_dict['data'] = json.loads(data)
-            elif BodyType == "JSON":
-                jsondata= data
-                data = []
-                request_dict['json'] = data
-                request_dict['data'] = []
-            else:
-                request_dict['data'] = data
-
-            auth=()
-            if AuthorizationUser:
-                auth =(AuthorizationUser, AuthorizationPass)
-                request_dict['authorizationuser']=AuthorizationUser
-                request_dict['authorizationpass']=AuthorizationPass
-
             response
-            if jsondata:
-                response = requests.request(method=method,url=Uri,headers=headers,params=params,
-                            data=data,json=jsondata,auth=auth)
-            else:
-                response = requests.request(method=method,url=Uri,headers=headers,params=params,
-                            data=data,auth=auth)
+            request_dict ={}
+            if properties["Method"] == "graphql":
+                graphql_query = "query" + properties["graphqlQuery"]
+                graphql_URL = properties["GraphqlUrl"]
+                graphql_headers = properties["HeadersAdd"]
+                print("execute graphql", graphql_query)
+                response = requests.post(graphql_URL, json={'query': graphql_query}, headers=graphql_headers)
+                response.raise_for_status()
 
-            # print(request_dict)
-            response.raise_for_status()
+            else:    
+                responsepayload = {'query':"query {  endpointpacks(where: { id: \"ENDPACKID\"}) { host_url }}"}
+                responsepayload['query'] = responsepayload['query'].replace("ENDPACKID",str(properties["EndpointPackId"]).strip())
+                # print(responsepayload)
+                response_json = requests.post(url=graphql,data=responsepayload).json()
+                host_url = response_json["data"]["endpointpacks"][0]["host_url"]
+
+                # testcase = requests.get(url=tcases+response["testcase"]["id"]).json()
+                # print(testcase["application"]["name"])
+                # host1 = testcase["application"]["url"]
+
+                method = properties["Method"]
+                Uri = host_url+properties["Uri"]
+
+                # if "custom_api" in properties:
+                #     Uri = properties["Uri"]
+
+
+                BodyType = properties["BodySelectedMenu"]
+                pathparams = properties["PathParametersAdd"] if properties["PathParametersAdd"] else ""
+                params = properties["QueryParametersAdd"] if properties["QueryParametersAdd"] else []
+                headers = properties["HeadersAdd"] if properties["HeadersAdd"] else []
+
+                if headers:
+                    for key,value in headers.items():
+                        if isinstance(value,dict):
+                            headers[key] = json.dumps(value)
+                        elif not isinstance(value,str):
+                            headers[key] = json.dumps(value)
+                AuthorizationUser = properties["AuthorizationUsername"] if properties["AuthorizationUsername"] else None          
+                AuthorizationPass = properties["AuthorizationPassword"] if properties["AuthorizationPassword"] else None           
+                
+                ### replace parthparam
+                if pathparams:
+                    for key,value in pathparams.items():
+                        replstr = "{"+str(key)+"}"
+                        print(replstr)
+                        Uri = Uri.replace(replstr,str(value))
+                        print(Uri)
+
+                request_dict = {
+                    'method': method,
+                    'url':Uri,
+                    'params': params,
+                    'headers': headers
+                }
+
+                print("request payloads api ------------------>", request_dict)
+
+                data = properties["AceEditorValue"] if properties["AceEditorValue"] else []
+                jsondata = {}
+                if BodyType == "FormData":
+                    data = properties["BodyFormDataAdd"]
+                    request_dict['data'] = json.loads(data)
+                elif BodyType == "JSON":
+                    jsondata= data
+                    data = []
+                    request_dict['json'] = data
+                    request_dict['data'] = []
+                else:
+                    request_dict['data'] = data
+
+                auth=()
+                if AuthorizationUser:
+                    auth =(AuthorizationUser, AuthorizationPass)
+                    request_dict['authorizationuser']=AuthorizationUser
+                    request_dict['authorizationpass']=AuthorizationPass
+
+                if jsondata:
+                    response = requests.request(method=method,url=Uri,headers=headers,params=params,
+                                data=data,json=jsondata,auth=auth)
+                else:
+                    response = requests.request(method=method,url=Uri,headers=headers,params=params,
+                                data=data,auth=auth)
+
+                print("response ----->", response)
+                response.raise_for_status()
 
       except HTTPError as http_err:
           print(f'HTTP error occurred: {http_err}')  # Python 3.6
@@ -350,7 +361,7 @@ class Api_Executor:
             if not validation:
                 json_response['status'] = "fail"
                 dec_response['status'] = False
-            print("flowsteps data ---------->", json_response)
+            print("flowsteps dataaaaaa ---------->", json_response)
             dbresponse = requests.post(url=flowsteps,json=json_response)
             # print(dbresponse['data'])
             print("cms response")
@@ -464,8 +475,8 @@ class Consumer():
     
         # print("{} received '{}'".format(self.name, body))
         data = json.loads(body)
-        print("Data --> ")
-        # print(data)
+        print("api executor Data ----> ")
+        print(data)
 
         if data:
             node_response = self._apiexecutor.testapi(data)

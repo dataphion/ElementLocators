@@ -80,7 +80,7 @@ class Decider:
         self.run(data)
 
     def run(self,data,node_response= None,index=1):
-            
+            print("run node response----> ", node_response)
             id = data['id']
             graph_json = data['graph_json']
             testcaseexecution = data['testcaseexecution']
@@ -264,6 +264,7 @@ class Decider:
             print(node_id)
 
             Type = graph_json[node_id]["properties"]["Type"]
+            print("eecution type ---->", Type)
 
             if Type == "api":
                 data = {"id":node_id,"testcaseid":id,"testcaseexecutionid":testcaseexecution,
@@ -396,7 +397,7 @@ class Consumer():
         # print("{} received '{}'".format(self.name, body))
         try:
             data = json.loads(body)
-            print("Data --> ")
+            print("decider Data --> ")
             print(data)
 
             if 'testsessionid' in data:

@@ -32,6 +32,7 @@ class TestRunner(Resource):
         try:
 
             queue_name = "testdecider" if 'testsuiteid' in data else "decider"
+            print("queue name ------------->", queue_name)
             #insert jobs
             json_payload = {"status": "started"}
             jobs_result = requests.post(url=jobs, json=json_payload).json()
@@ -46,7 +47,7 @@ class TestRunner(Resource):
 
             channel.queue_declare(queue=queue_name)
 
-            print(data)
+            print("job created with job ------------>", data)
             channel.basic_publish(
                 exchange='', routing_key=queue_name, body=json.dumps(data))
             

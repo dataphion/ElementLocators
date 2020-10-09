@@ -181,7 +181,7 @@ class Consumer():
         # print("{} received '{}'".format(self.name, body))
 #        try:
             data = json.loads(body)
-            print("Data --> ")
+            print("test decider Data --> ")
             print(data)
 
             global sio

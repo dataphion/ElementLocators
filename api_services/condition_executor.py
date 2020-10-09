@@ -449,7 +449,7 @@ class Consumer():
         
         # print("{} received '{}'".format(self.name, body))
         data = json.loads(body)
-        print("Data --> ")
+        print("condition Data --> ")
         print(data)
 
         node_response = self._condition_executor.testcondition(data)
