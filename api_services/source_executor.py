@@ -17,6 +17,8 @@ from cassandra.auth import PlainTextAuthProvider
 from cassandra.query import ordered_dict_factory
 import psycopg2
 import paramiko
+import imaplib
+import email
 
 host = "http://localhost:1337"
 flow = host+"/flows/"
@@ -600,7 +602,32 @@ class Source_Executor:
                     raise Exception("error")
 
 
+            if DatabaseType == "gmail_reader":
+                print("came in email reader")
+                print("email properties", properties)
 
+                email_response = self.readEmails(properties)
+                print("email response", email_response)
+                if email_response['status']:
+                    json_response = {
+                        'name': title,
+                        'status':'pass',
+                        'node_id': mqdata["id"],
+                        'type': "Shell Command",
+                        'response': email_response["response"],
+                        'index': mqdata["index"],
+                        'testcaseexecution': {
+                            'id': mqdata["testcaseexecutionid"]
+                        }
+                    }
+                    dbresponse = requests.post(
+                        url=flowsteps, json=json_response)
+                    print("dbresponse ------>", dbresponse)  
+                    return {'status': True, 'id': mqdata["id"], 'testcaseid': mqdata["testcaseid"],
+                            'type': DatabaseType, 'testcaseexecutionid': mqdata["testcaseexecutionid"],'environment_id':mqdata['environment_id'],'browser':mqdata['browser'],
+                            'testsessionexecutionid': mqdata["testsessionexecutionid"], 'index': mqdata["index"]} 
+                else:
+                    raise Exception("error")
 
             if DatabaseType == "kafka":
                 print("came in kafka")
@@ -771,109 +798,74 @@ class Source_Executor:
                 return {'status':False,'response':{"status":f"Consume from {topic_name}", "message": "" }}
             else:    
                 return {'status':True,'response':{"status":f"Consume from {topic_name}", "message": f"found {expected_incr} new messages" }}
-            
-
-
-            # ----------- Previous working code ------------
-
-            # from kafka.consumer import KafkaConsumer
-            # from kafka import TopicPartition
-            # from time import sleep
-            # # print(properties)
-            # host = data['ip']+":"+data['port']
-            # topic_name = properties['KafkaTopicName']
-            
-            # # GET LAST OFFSET
-            # consumer = KafkaConsumer(topic_name, bootstrap_servers=host)
-            # partitions=  [TopicPartition(topic_name, p) for p in consumer.partitions_for_topic(topic_name)]
-            # last_offset_per_partition = consumer.end_offsets(partitions)
-            # str_partition = str(last_offset_per_partition)
-            # offset_value = int(str_partition.split(":")[1].split("}")[0])
-
-            # last_offset_value = offset_value
-            # latest_offset_value = 0
-
-            # # POLLING & WAITING TIME TO CONSUME MESSAGE
-            # max_time = properties['KafkaWaitingTime'] * 60
-            # t = datetime.datetime.now()
-            # split_time= str(t).split(" ")
-            # date_split = split_time[0].split("-")
-            # time_split = split_time[1].split(":")
-            # a = datetime.datetime(int(date_split[0]),int(date_split[1]),int(date_split[2]),int(time_split[0]),int(time_split[1]),int(float(time_split[2])))
-            # waiting_time = a + datetime.timedelta(0,max_time) # days, seconds, then other fields.
-
-            # received_msg = ""
-            # maxi_time = a.time()
-
-            # print("get new msg for consumer -------->")
-            # from confluent_kafka import Consumer, KafkaError
-            # settings = {
-            #     'bootstrap.servers': host,
-            #     'group.id': 'mygroup',
-            #     'client.id': 'client-1',
-            #     'enable.auto.commit': True,
-            #     'session.timeout.ms': 6000,
-            #     'default.topic.config': {'auto.offset.reset': 'smallest'}
-            # }
-
-            # c = Consumer(settings)
-            # c.subscribe([topic_name])
-            # message_received = False
-            # while maxi_time < waiting_time.time():
-            #     sleep(properties['PollingInterval'])
-            #     tm = datetime.datetime.now()
-            #     split_time1= str(tm).split(" ")
-            #     date_split1 = split_time1[0].split("-")
-            #     time_split1 = split_time1[1].split(":")
-            #     a1 = datetime.datetime(int(date_split1[0]),int(date_split1[1]),int(date_split1[2]),int(time_split1[0]),int(time_split1[1]),int(float(time_split1[2])))
-            #     maxi_time = a1.time()
-            #     # print("maxi_time updated", maxi_time)
-            #     msg = c.poll(properties['PollingInterval'])
-            #     if msg is None:
-            #         continue
-            #     elif not msg.error():
-            #         if msg.offset() == last_offset_value:
-            #             latest_offset_value = msg.offset()
-            #             print('Received message: {0}'.format(msg.value()))
-            #             received_msg = msg.value().decode("utf-8")
-            #             message_received = True
-            #             # VALIDATE RESPONSE
-            #             if properties['kafkaValidation'] == "response":
-            #                 print("validate response", type(properties['ExpectedKafkaReponse']))
-            #                 if received_msg.startswith("{"):
-            #                     received_msg = json.loads(received_msg)
-            #                 if type(received_msg) == type(properties['ExpectedKafkaReponse']):
-            #                     for key in properties['ExpectedKafkaReponse'].keys(): 
-            #                         if not key in received_msg:
-            #                             print("validation failed")
-            #                             message_received = False
-            #                 else:
-            #                     message_received = False
-            #             else:
-            #                 print("index validation")
-            #                 if latest_offset_value == last_offset_value:
-            #                     message_received = True
-            #                 else:
-            #                     message_received = False
-            #             break
-            #     elif msg.error().code() == KafkaError._PARTITION_EOF:
-            #         if msg.offset() == last_offset_value:
-            #             print('End of partition reached {0}/{1}'
-            #                 .format(msg.topic(), msg.partition()))
-            #             break
-            #     else:
-            #         if msg.offset() == last_offset_value:
-            #             print('Error occured: {0}'.format(msg.error().str()))
-            #             break
-            
-            # if message_received:
-            #     return {'status':True,'response':{"status":f"Consume from {topic_name}", "message": received_msg }}
-            # else:
-            #     return {'status':False,'response':{"status":f"Consume from {topic_name}", "message": "" }}
                 
         except Exception as identifier:
             print("--------error>", identifier)
-            return {'status': False}       
+            return {'status': False}     
+
+    def readEmails(self, properties):
+        try:
+            print("emails ----->", properties)
+            max_timeout = properties['emailWaitingTime']
+            poll_intervel = properties['PollingInterval']
+
+            counter = max_timeout*60/poll_intervel
+            last_email_count = properties['last_email_count']
+            expected_incr = properties['ExpectedIncrement']
+
+
+            # get email account details
+            # details = requests.get(host+"/dbregistrations/"+str(properties['SelectedEmailId']), allow_redirects=True)
+            # print("data---->", details.content)
+            found = False
+            imap_ssl_host = 'imap.gmail.com'
+            imap_ssl_port = 993
+            username = properties['email']
+            password = properties['password']
+            server = imaplib.IMAP4_SSL(imap_ssl_host, imap_ssl_port)
+
+            server.login(username, password)
+
+            server.select('INBOX')
+
+            current_email_count = 0
+            output = {}
+            while(counter > 0 and found == False):
+                status, data = server.search(None, 'UNSEEN')
+                unseen_messages = data[0].split()
+                print("unseen emails ----->", unseen_messages)
+
+                # current_email_count = last_email_count + expected_incr
+                if(len(unseen_messages) >= last_email_count + expected_incr):
+                    expected_msg = unseen_messages[-expected_incr:]
+                    print("msgssss ------->", expected_msg)
+                    for num in expected_msg:
+                        print("msg --->", num)
+                        status, data = server.fetch(num, '(RFC822)')
+                        email_msg = data[0][1]
+                        raw_email_string = email_msg.decode('utf-8')
+                        email_message = email.message_from_string(raw_email_string)
+
+                        print("------------------email body-------------")
+                        email_body = ""
+                        for part in email_message.walk():
+                            if part.get_content_type() == 'text/plain':
+                                email_body = part.get_payload()
+                        
+                        output[num.decode("utf-8") ] = {"From": email_message['From'], "Subject": email_message['Subject'], "body": email_body}
+
+                    found = True
+
+                counter = counter - 1
+                
+
+            if found == False:
+                return {'status':False,'response': ""}
+            else:    
+                return {'status':True,'response': output}
+        except Exception as identifier:
+            print(identifier)
+            return {'status': False}  
 
     def rabbitmqpub(self, data,properties):
 
