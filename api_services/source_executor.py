@@ -516,7 +516,7 @@ class Source_Executor:
                     print("shell properties ---", properties)
                     print("shell data ---", data)
 
-                    # getkeyfile_host = "http://localhost:1337"
+                    getkeyfile_host = "http://localhost:1337"
                     PEMFILEEXIST = False
                     print("pem file url", host)
                     # print("access url", graphql)
@@ -548,6 +548,7 @@ class Source_Executor:
                         cmd = properties['ShellCommand'].split(",")
                     commands = cmd
                     print("cmd---------->", cmd)
+                    status = True
                     for command in commands:
                         print("Executing {}".format( command ))
                         stdin , stdout, stderr = c.exec_command(command)
@@ -558,16 +559,23 @@ class Source_Executor:
                         # error
                         error = stderr.read()
                         error = str(error, 'utf-8')
-                        if result:
+                        if error:
+                            status = False
+                            output[command] = {"result": result, "command": command, "error": error }
+                        elif result:
+                            status = True
                             output[command] = {"result": result, "command": command}
                         else:
+                            status = False
                             output[command] = {"error": error, "command": command}
                     c.close()
 
-                    return{'status': True, 'response': output}
+                    print("output ---->", output)
+
+                    return{'status': status, 'response': output}
 
                 except Exception as e:
-                    print(e)
+                    print("exception ----->", e)
                     return{'status': False}
             
             if DatabaseType == "shell":
@@ -577,6 +585,7 @@ class Source_Executor:
                 # print("get db data ---->", data)
 
                 shellResponse = executeShellCommand(data, properties)
+                print("shell response --->", shellResponse)
 
                 if shellResponse["status"]:
                     json_response = {
