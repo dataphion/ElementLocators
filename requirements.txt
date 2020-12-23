@@ -16,6 +16,6 @@ scipy==1.3.1
 gevent_socketio==0.3.6
 google-cloud-vision==1.0.0
 confluent-kafka==1.5.0
-python-socketio==4.6.0
+python-socketio==5.0.3
 psycopg2==2.8.6
 paramiko==2.7.2
