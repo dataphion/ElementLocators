@@ -5,5 +5,6 @@ WORKDIR /opt/services/
 COPY . .
 
 RUN ls && pip install -r requirements.txt
+RUN pip install python-socketio --upgrade
 
 CMD [ "python","-u","decider.py" ]
